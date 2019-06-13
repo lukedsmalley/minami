@@ -8,7 +8,7 @@ import { Configuration } from './common';
 const doc = `
 Minami 1.0
 
-Usage: minami pull <id> <destination>
+Usage: minami pull <id> [<destination>]
 
 Options:
   -h --help      Print usage information
