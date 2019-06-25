@@ -2,13 +2,16 @@ import { docopt } from 'docopt'
 import { readJSON } from 'fs-extra'
 import { homedir } from 'os'
 import { join } from 'path'
-import { pull } from './pull'
-import { Configuration } from './common';
+import { sync } from './sync'
+import { drop } from './drop'
+import { Configuration } from './common'
+import chalk from 'chalk'
 
 const doc = `
 Minami 1.0
 
-Usage: minami pull <id> [<destination>]
+Usage: minami sync <id> [<destination>]
+       minami drop <id>
 
 Options:
   -h --help      Print usage information
@@ -16,11 +19,13 @@ Options:
 `
 
 const args = docopt(doc, { version: 'Minami 1.0' })
-type Handler = (config: Configuration) => Promise<void>
-let handler: Handler = async (config) => console.log(doc)
+type Handler = (config: Configuration, clones: Record<string, string>) => Promise<void>
+let handler: Handler = async (config, clones) => console.log(doc)
 
-if (args.pull) {
-  handler = config => pull(config, args['<id>'], args['<destination>'])
+if (args.sync) {
+  handler = (config, clones) => sync(config, clones, args['<id>'], args['<destination>'])
+} else if (args.drop) {
+  handler = (config, clones) => drop(config, clones, args['<id>'])
 }
 
 ;(async () => {
@@ -28,7 +33,11 @@ if (args.pull) {
   if (typeof config.host !== 'string') {
     throw 'Error: No host specified in ~/.minami/config.json'
   }
-  await handler(config)
+  let clones = await readJSON(join(homedir(), '.minami', 'clones.json'))
+  await handler(config, clones)
 })().catch(err => {
-  console.log(`Operation failed due to ${err}\n${err.stack}`)
+  console.log(chalk.redBright(`Operation failed due to ${err}`))
+  if (err.stack) {
+    console.log(err.stack)
+  }
 })

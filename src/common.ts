@@ -8,15 +8,19 @@ export interface Configuration {
   readonly host: string
 }
 
+export function log(...message: string[]) {
+  console.log(chalk.cyanBright(...message))
+}
+
 function getCommandFromArgs(...params: any[]): [string, string[], object] {
   let path: string
   let args: string[] = []
   let env: object = {}
 
   for (let param of params) {
-    if (param instanceof Array) args.push(...param.map(p => p.toString))
+    if (param instanceof Array) args.push(...param.map(p => p.toString()))
     else if (typeof param === 'object') Object.assign(env, param)
-    else args.push(param.toString().split(' '))
+    else args.push(...param.toString().split(' '))
   }
 
   path = args.shift()!
@@ -25,9 +29,9 @@ function getCommandFromArgs(...params: any[]): [string, string[], object] {
 }
 
 export function exec(...params: any[]): Promise<string> {
-  let [path, args, env] = getCommandFromArgs(params)
+  let [path, args, env] = getCommandFromArgs(...params)
   return new Promise((resolve, reject) => {
-    console.log(chalk.gray([path, ...args].join(' ')))
+    console.log(chalk.gray([path, ...args.map(arg => arg.indexOf(' ') >= 0 ? `'${arg}'` : arg)].join(' ')))
     let subprocess = spawn(path, args, { env: Object.assign({}, process.env, env) })
     let output = ''
     subprocess.stdout.on('data', data => {
@@ -40,7 +44,7 @@ export function exec(...params: any[]): Promise<string> {
     })
     subprocess.once('close', code => {
       if (code !== 0) {
-        reject(code)
+        reject(`CommandError: Exited with status code ${code}`)
       } else {
         resolve(output)
       }
@@ -48,8 +52,8 @@ export function exec(...params: any[]): Promise<string> {
   })
 }
 
-export function execSucceeds(...params: any[]): Promise<string | null> {
-  let [path, args, env] = getCommandFromArgs(params)
+export function execSucceeds(...params: any[]): Promise<boolean> {
+  let [path, args, env] = getCommandFromArgs(...params)
   return new Promise((resolve, reject) => {
     console.log(chalk.gray([path, ...args].join(' ')))
     let subprocess = spawn(path, args, { env: Object.assign({}, process.env, env) })
@@ -63,21 +67,17 @@ export function execSucceeds(...params: any[]): Promise<string | null> {
       process.stderr.write(data)
     })
     subprocess.once('close', code => {
-      if (code !== 0) {
-        resolve(null)
-      } else {
-        resolve(output)
-      }
+      resolve(code === 0)
     })
   })
 }
 
 export function ssh(config: Configuration, command: string) {
-  return exec('ssh', '-i', join(homedir(), '.minami', 'id.pem'), config.host, command)
+  return exec('ssh', ['-i', join(homedir(), '.minami', 'id.pem'), config.host, command])
 }
 
 export function sshSucceeds(config: Configuration, command: string) {
-  return execSucceeds('ssh', '-i', join(homedir(), '.minami', 'id.pem'), config.host, command)
+  return execSucceeds('ssh', ['-i', join(homedir(), '.minami', 'id.pem'), config.host, command])
 }
 
 export async function isDirectory(...pathParts: any[]): Promise<boolean> {
