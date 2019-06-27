@@ -1,78 +1,124 @@
-import { Configuration, exec, isDirectory, log, sshSucceeds, ssh } from './common'
-import { copy, remove, writeJSON, mkdirs } from 'fs-extra'
+import { Configuration, exec, isNonEmptyDirectory, info, sshSucceeds, ssh, execSucceeds, warn, isFile, isValidObjectDirectory, isCopySafe, MINAMI_DEFAULT_SKELETON_DIR } from './common'
+import { copy, remove, writeJSON, mkdirs, move } from 'fs-extra'
 import { join, resolve, parse } from 'path'
 import { homedir } from 'os'
+import { performance } from 'perf_hooks';
 
-export async function sync(config: Configuration, clones: Record<string, string>, id: string, destination?: string) {
-  let workingDirectory
+export async function sync(config: Configuration, checkouts: Record<string, string>, id: string, destination?: string) {
+  if (checkouts[id] && !await isNonEmptyDirectory(checkouts[id])) {
+    info('The previous checkout directory no longer exists')
+    delete checkouts[id]
+  }
+
   if (destination) {
     destination = resolve(destination)
-    if (parse(destination).base === id) {
-      workingDirectory = destination
-      destination = parse(destination).dir
-    } else {
-      workingDirectory = join(destination, id)
+    if (parse(destination).base !== id) {
+      destination = resolve(destination, id)
     }
-  } else if (clones[id]) {
-    destination = parse(clones[id]).dir
-    workingDirectory = clones[id]
+  }
+
+  if (checkouts[id]) {
+    if (destination && destination !== checkouts[id]) {
+      if (await isNonEmptyDirectory(destination)) {
+        warn(`The object is checked out into '${checkouts[id]}', ` + 
+            `but the requested sync destination is non-empty directory '${destination}'. ` +
+            'You need to manually merge the contents of these two directories.')
+        return 1
+      } else {
+        info('A destination different from the existing checkout directory was given; moving files to new location')
+        await move(checkouts[id], destination)
+        checkouts[id] = destination
+        await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
+      }
+    } else {
+      destination = checkouts[id]
+    }
+  } else if (destination) {
+    checkouts[id] = destination
+    await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
   } else {
     let cwd = resolve(process.cwd())
-    if (parse(process.cwd()).base === id) {
-      destination = parse(cwd).dir
-      workingDirectory = cwd
-    } else {
-      destination = cwd
-      workingDirectory = resolve(cwd, id)
-    }
+    let cwdBase = parse(cwd).base
+    checkouts[id] = destination = cwdBase === id ? cwdBase : resolve(cwd, id)
+    await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
   }
-  destination = destination
-  workingDirectory = workingDirectory
-  log(`Working directory: ${workingDirectory}`)
-  log(`Destination: ${destination}`)
+  info(`Checkout directory is ${destination}`)
 
-  if (clones[id] && clones[id] !== workingDirectory) {
-    log('Already synced, but not to the given destination; copying existing files')
-    await copy(clones[id], workingDirectory)
-  }
+  info('Looking up local and remote objects')
+  const remoteObjectExists = await sshSucceeds(config, `git --gir-dir=~/.minami-user/objects/${id} merge HEAD`)
+  const localObjectPath = resolve(homedir(), '.minami-user', 'objects', id)
+  const localObjectExists = await isNonEmptyDirectory(localObjectPath)
+  const destinationExists = await isNonEmptyDirectory(destination)
 
-  const localObjectCachePath = resolve(homedir(), '.minami', 'objects')
-  const localObjectPath = resolve(homedir(), '.minami', 'objects', id)
-  await mkdirs(localObjectCachePath)
-
-  if (await sshSucceeds(config, `test -d ~/.minami/objects/${id}`)) {
-    log('The object exists on the remote system')
-    if (await isDirectory(localObjectPath)) {
-      log('Syncronizing with the remote system')
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'add', '.'])
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'commit', '-m', 'update'])
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'pull'])
-      await exec('git', [`--git-dir=${localObjectPath}`, 'push'])
+  if (!localObjectExists) {
+    if (remoteObjectExists) {
+      if (destinationExists) {
+        warn('Destination is a non-empty directory, but no object history was found. ' +
+             'You need to clone the object into a separate directory and then manually ' +
+             'merge the existing files into the object.')
+        return 1
+      } else {
+        info('Cloning object from remote system')
+        exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'clone', `ssh://${config.host}/~/.minami-user/objects/${id}`])
+      }
     } else {
-      log('The object does not exist on this system; cloning object')
-      await exec('git', [`--git-dir=${localObjectCachePath}`, `--work-tree=${workingDirectory}`, 'clone', `ssh://${config.host}/~/.minami/objects/${id}`])
+      info('No object found on remote system; creating object locally')
+      exec('git', ['-C', localObjectPath, `--git-dir=.`, 'init'])
     }
+  } else if (!destinationExists) {
+    info('Checking out missing files from local object history')
+    exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'checkout'])
+    return 0
   } else {
-    log('The object does not exist on the remote system')
-    if (! await isDirectory(localObjectPath)) {
-      log('The object does not exist on this system; creating object')
-      await mkdirs(localObjectPath)
-      await mkdirs(workingDirectory)
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'init'])
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'add', '.'])
-      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${workingDirectory}`, 'commit', '-m', 'update'])
+    //check merging
+  }
+
+  if (!await isValidObjectDirectory(destination)) {
+    if (destinationExists || await isCopySafe(MINAMI_DEFAULT_SKELETON_DIR, destination)) {
+      info('Creating object from skeleton (and existing files, if any)')
+      await copy(MINAMI_DEFAULT_SKELETON_DIR, destination)
+    } else {
+      warn('Directory cannot safely be turned into a valid object. It may be wise to ' +
+           'create an object in a separate directory and manually merge your existing files.')
+      return 1
     }
-    log('Mirroring object on the remote system')
-    await ssh(config, `mkdir -p ~/.minami/objects/${id}; git -C ~/.minami/objects/${id} --git-dir=. init`)
-    await exec('git', [`--git-dir=${localObjectPath}`, 'push', '--mirror', `ssh://${config.host}/~/.minami/objects/${id}`])
+  }
+  
+  if (!await execSucceeds('git', [`--git-dir=${localObjectPath}`, 'merge', 'HEAD'])) {
+    warn('Changes from the remote system are still in the process of being merged into your ' +
+         'checked-out files. Finish resolving merge conflicts in the checked-out files and' +
+         `then run 'minami accept ${id}'.`)
+    return 1
   }
 
-  if (clones[id] && clones[id] !== workingDirectory) {
-    log('Removing files left over from the destination change')
-    remove(clones[id])
-    clones[id] = workingDirectory
+  if (!destinationExists) {
+    
+  } else {
+    if (!await isFile(destination, '.minami', 'object.yml')) {
+      //Handle this better
+      warn('Object does not have a metadata file. (.minami/object.yml)')
+      return 1
+    }
+  
+    info('Adding changes to history')
+    exec('git', ['-C', destination, `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'add', '.'])
+    execSucceeds('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', performance.now()])
   }
 
-  log('Updating local object index')
-  await writeJSON(join(homedir(), '.minami', 'clones.json'), clones)
+  if (remoteObjectExists) {
+    info('Pulling any new changes from remote system')
+    exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'pull'])
+
+    if (!await execSucceeds('git', [`--git-dir=${localObjectPath}`, 'merge', 'HEAD'])) {
+      warn('Changes from the remote system must be merged with your local changes. ' +
+           `Merge the marked changes in your checked-out files, and rerun 'minami sync ${id}'.`)
+      return 0
+    }
+
+    info('Pushing history to remote system')
+    exec('git', [`--git-dir=${localObjectPath}`, 'push'])
+  } else {
+    info('Copying object to remote system')
+    exec('scp', ['-i', resolve(homedir(), '.minami-user', 'id.pem'), '-r', localObjectPath, `${config.host}:~/.minami-user/objects`])
+  }
 }

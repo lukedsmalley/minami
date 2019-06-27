@@ -4,7 +4,7 @@ import { join, resolve } from 'path'
 import { homedir } from 'os'
 
 export async function drop(config: Configuration, clones: Record<string, string>, id: string) {
-  const localObjectPath = resolve(homedir(), '.minami', 'objects', id)
+  const localObjectPath = resolve(homedir(), '.minami-user', 'objects', id)
 
   if (await isDirectory(localObjectPath)) {
     await remove(localObjectPath)
@@ -15,5 +15,7 @@ export async function drop(config: Configuration, clones: Record<string, string>
     delete clones[id]
   }
 
-  await writeJSON(join(homedir(), '.minami', 'clones.json'), clones)
+  await writeJSON(join(homedir(), '.minami-user', 'clones.json'), clones)
+
+  return 0
 }

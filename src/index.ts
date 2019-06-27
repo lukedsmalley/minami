@@ -19,22 +19,25 @@ Options:
 `
 
 const args = docopt(doc, { version: 'Minami 1.0' })
-type Handler = (config: Configuration, clones: Record<string, string>) => Promise<void>
-let handler: Handler = async (config, clones) => console.log(doc)
+type Handler = (config: Configuration, checkouts: Record<string, string>) => Promise<number>
+let handler: Handler = async (config, checkouts) => {
+  console.log(doc)
+  return 0
+}
 
 if (args.sync) {
-  handler = (config, clones) => sync(config, clones, args['<id>'], args['<destination>'])
+  handler = (config, checkouts) => sync(config, checkouts, args['<id>'], args['<destination>'])
 } else if (args.drop) {
-  handler = (config, clones) => drop(config, clones, args['<id>'])
+  handler = (config, checkouts) => drop(config, checkouts, args['<id>'])
 }
 
 ;(async () => {
-  let config = await readJSON(join(homedir(), '.minami', 'config.json')) as Configuration
+  let config = await readJSON(join(homedir(), '.minami-user', 'config.json')) as Configuration
   if (typeof config.host !== 'string') {
-    throw 'Error: No host specified in ~/.minami/config.json'
+    throw 'Error: No host specified in ~/.minami-user/config.json'
   }
-  let clones = await readJSON(join(homedir(), '.minami', 'clones.json'))
-  await handler(config, clones)
+  let checkouts = await readJSON(join(homedir(), '.minami-user', 'checkouts.json'))
+  process.exit(await handler(config, checkouts))
 })().catch(err => {
   console.log(chalk.redBright(`Operation failed due to ${err}`))
   if (err.stack) {
