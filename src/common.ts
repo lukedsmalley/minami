@@ -8,7 +8,7 @@ import { createInterface } from 'readline'
 export const MINAMI_USER_DIR = resolve(homedir(), '.minami-user'),
              MINAMI_CONFIG_PATH = join(MINAMI_USER_DIR, 'config.json'),
              MINAMI_CHECKOUT_INDEX_PATH = join(MINAMI_USER_DIR, 'checkouts.json'),
-             MINAMI_DEFAULT_SKELETON_DIR = join(MINAMI_USER_DIR, 'skel')
+             MINAMI_DEFAULT_TEMPLATE_DIR = join(MINAMI_USER_DIR, 'default_template')
 
 export interface Configuration {
   readonly host: string
@@ -130,6 +130,28 @@ export async function isCopySafe(source: string, destination: string) {
   return true
 }
 
-export function askUser() {
-  let interface = createInterface()
+export function readOptional(prompt: string) {
+  let reader = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  })
+  return new Promise(resolve => {
+    reader.question(prompt + '[Y/n]', answer => {
+      reader.close()
+      resolve(answer === 'Y' || answer === 'y')
+    })
+  })
+}
+
+export function readLine(prompt: string) {
+  let reader = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  })
+  return new Promise(resolve => {
+    reader.question(prompt, answer => {
+      reader.close()
+      resolve(answer)
+    })
+  })
 }

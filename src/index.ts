@@ -10,7 +10,7 @@ import chalk from 'chalk'
 const doc = `
 Minami 1.0
 
-Usage: minami sync <id> [<destination>]
+Usage: minami sync [-t=<template_path>] <id> [<destination>]
        minami drop <id>
 
 Options:
@@ -26,7 +26,7 @@ let handler: Handler = async (config, checkouts) => {
 }
 
 if (args.sync) {
-  handler = (config, checkouts) => sync(config, checkouts, args['<id>'], args['<destination>'])
+  handler = (config, checkouts) => sync(config, checkouts, args['<id>'], args['<destination>'], args['<template_path>'])
 } else if (args.drop) {
   handler = (config, checkouts) => drop(config, checkouts, args['<id>'])
 }
