@@ -1,8 +1,6 @@
-import { Configuration, exec, isNonEmptyDirectory, info, sshSucceeds, execSucceeds, warn, isValidObjectDirectory, isCopySafe, MINAMI_DEFAULT_TEMPLATE_DIR } from './common'
-import { copy, writeJSON, move } from 'fs-extra'
-import { resolve, parse } from 'path'
-import { homedir } from 'os'
-import { performance } from 'perf_hooks'
+import { Configuration, exec, info, sshSucceeds, execSucceeds, warn, isValidObjectDirectory, isCopySafe, MINAMI_DEFAULT_TEMPLATE_DIR, ssh } from './common'
+import { cp, mv, writeJSON, isNonEmptyDirectory, resolve, join } from './fs'
+import { parse } from 'path'
 
 export async function sync(config: Configuration, checkouts: Record<string, string>, id: string, destination?: string, templatePath?: string) {
   if (checkouts[id] && !await isNonEmptyDirectory(checkouts[id])) {
@@ -11,9 +9,8 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
   }
 
   if (destination) {
-    destination = resolve(destination)
-    if (parse(destination).base !== id) {
-      destination = resolve(destination, id)
+    if (parse(resolve(destination)).base !== id) {
+      destination = join(destination, id)
     }
   }
 
@@ -26,27 +23,26 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
         return 1
       } else {
         info('A destination different from the existing checkout directory was given; moving files to new location')
-        await move(checkouts[id], destination)
+        await mv(checkouts[id], destination)
         checkouts[id] = destination
-        await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
+        await writeJSON('~/.minami-user/checkouts.json', checkouts)
       }
     } else {
       destination = checkouts[id]
     }
   } else if (destination) {
     checkouts[id] = destination
-    await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
+    await writeJSON('~/.minami-user/checkouts.json', checkouts)
   } else {
-    const cwd = resolve(process.cwd())
-    const cwdBase = parse(cwd).base
-    checkouts[id] = destination = cwdBase === id ? cwdBase : resolve(cwd, id)
-    await writeJSON(resolve(homedir(), '.minami-user', 'checkouts.json'), checkouts)
+    const cwdBase = parse(process.cwd()).base
+    checkouts[id] = destination = cwdBase === id ? process.cwd() : join(process.cwd(), id)
+    await writeJSON('~/.minami-user/checkouts.json', checkouts)
   }
   info(`Checkout directory is ${destination}`)
 
   info('Looking up local and remote objects')
   const remoteObjectExists = await sshSucceeds(config, `git --gir-dir=~/.minami-user/objects/${id} merge HEAD`)
-  const localObjectPath = resolve(homedir(), '.minami-user', 'objects', id)
+  const localObjectPath = join('~/.minami-user/objects', id)
   const localObjectExists = await isNonEmptyDirectory(localObjectPath)
   const destinationExists = await isNonEmptyDirectory(destination)
 
@@ -80,9 +76,7 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
 
   if (!await isValidObjectDirectory(destination)) {
     if (!templatePath) {
-      templatePath = process.env.MINAMI_TEMPLATE_PATH
-        ? resolve(process.env.MINAMI_TEMPLATE_PATH)
-        : MINAMI_DEFAULT_TEMPLATE_DIR
+      templatePath = process.env.MINAMI_TEMPLATE_PATH || MINAMI_DEFAULT_TEMPLATE_DIR
     }
 
     if (!await isValidObjectDirectory(templatePath)) {
@@ -91,8 +85,8 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
     }
 
     if (await isCopySafe(templatePath, destination)) {
-      info('Creating object from skeleton (and existing files, if any)')
-      await copy(MINAMI_DEFAULT_TEMPLATE_DIR, destination)
+      info('Creating object from template directory (and existing files, if any)')
+      await cp(MINAMI_DEFAULT_TEMPLATE_DIR, destination)
     } else {
       warn('Directory cannot safely be turned into a valid object. It may be wise to ' +
            'create an object in a separate directory and manually merge your existing files.')
@@ -102,7 +96,7 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
 
   info('Adding changes to history')
   exec('git', ['-C', destination, `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'add', '.'])
-  execSucceeds('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', performance.now()])
+  execSucceeds('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', Date.now()])
 
   if (remoteObjectExists) {
     info('Pulling any new changes from remote system')
@@ -118,7 +112,8 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
     exec('git', [`--git-dir=${localObjectPath}`, 'push'])
   } else {
     info('Copying object to remote system')
-    exec('scp', ['-i', resolve(homedir(), '.minami-user', 'id.pem'), '-r', localObjectPath, `${config.host}:~/.minami-user/objects`])
+    ssh(config, 'mkdir -p ~/.minami-user/objects')
+    exec('scp', ['-i', '~/.minami-user/id.pem', '-r', localObjectPath, `${config.host}:~/.minami-user/objects`])
   }
 
   return 0

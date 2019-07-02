@@ -1,21 +1,17 @@
-import { Configuration, isDirectory } from './common'
-import { remove, writeJSON } from 'fs-extra'
-import { join, resolve } from 'path'
-import { homedir } from 'os'
+import { Configuration } from './common'
+import { rm, writeJSON, isDirectory } from './fs'
 
 export async function drop(config: Configuration, clones: Record<string, string>, id: string) {
-  const localObjectPath = resolve(homedir(), '.minami-user', 'objects', id)
-
-  if (await isDirectory(localObjectPath)) {
-    await remove(localObjectPath)
+  if (await isDirectory('~/.minami-user/objects', id)) {
+    await rm('~/.minami-user/objects', id)
   }
 
   if (clones[id]) {
-    await remove(clones[id])
+    await rm(clones[id])
     delete clones[id]
   }
 
-  await writeJSON(join(homedir(), '.minami-user', 'clones.json'), clones)
+  await writeJSON('~/.minami-user/clones.json', clones)
 
   return 0
 }

@@ -1,7 +1,5 @@
 import { docopt } from 'docopt'
-import { readJSON } from 'fs-extra'
-import { homedir } from 'os'
-import { join } from 'path'
+import { readJSON } from './fs'
 import { sync } from './sync'
 import { drop } from './drop'
 import { Configuration } from './common'
@@ -32,11 +30,11 @@ if (args.sync) {
 }
 
 ;(async () => {
-  let config = await readJSON(join(homedir(), '.minami-user', 'config.json')) as Configuration
+  let config = await readJSON('~/.minami-user/config.json') as Configuration
   if (typeof config.host !== 'string') {
     throw 'Error: No host specified in ~/.minami-user/config.json'
   }
-  let checkouts = await readJSON(join(homedir(), '.minami-user', 'checkouts.json'))
+  let checkouts = await readJSON('~/.minami-user/checkouts.json')
   process.exit(await handler(config, checkouts))
 })().catch(err => {
   console.log(chalk.redBright(`Operation failed due to ${err}`))

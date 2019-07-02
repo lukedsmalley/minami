@@ -1,14 +1,13 @@
 import { spawn } from 'child_process'
 import chalk from 'chalk'
-import { access, constants, lstat, readdir } from 'fs-extra'
-import { homedir } from 'os'
-import { resolve, join, sep } from 'path'
+import { readdir } from 'fs-extra'
 import { createInterface } from 'readline'
+import { isFile, join, isDirectory } from './fs'
 
-export const MINAMI_USER_DIR = resolve(homedir(), '.minami-user'),
-             MINAMI_CONFIG_PATH = join(MINAMI_USER_DIR, 'config.json'),
-             MINAMI_CHECKOUT_INDEX_PATH = join(MINAMI_USER_DIR, 'checkouts.json'),
-             MINAMI_DEFAULT_TEMPLATE_DIR = join(MINAMI_USER_DIR, 'default_template')
+export const MINAMI_USER_DIR = '~/.minami-user',
+             MINAMI_CONFIG_PATH = '~/.minami-user/config.json',
+             MINAMI_CHECKOUT_INDEX_PATH = '~/.minami-user/checkouts.json',
+             MINAMI_DEFAULT_TEMPLATE_DIR = '~/.minami-user/default_template'
 
 export interface Configuration {
   readonly host: string
@@ -74,41 +73,11 @@ export function execSucceeds(...params: any[]): Promise<boolean> {
 }
 
 export function ssh(config: Configuration, command: string) {
-  return exec('ssh', ['-i', join(homedir(), '.minami-user', 'id.pem'), config.host, command])
+  return exec('ssh', ['-i', '~/.minami-user/id.pem', config.host, command])
 }
 
 export function sshSucceeds(config: Configuration, command: string) {
-  return execSucceeds('ssh', ['-i', join(homedir(), '.minami-user', 'id.pem'), config.host, command])
-}
-
-export async function isDirectory(...pathParts: any[]): Promise<boolean> {
-  try {
-    let path = pathParts.map(p => p.toString()).join(sep)
-    await access(path, constants.F_OK)
-    return (await lstat(path)).isDirectory()
-  } catch {
-    return false
-  }
-}
-
-export async function isNonEmptyDirectory(...pathParts: any[]): Promise<boolean> {
-  try {
-    let path = pathParts.map(p => p.toString()).join(sep)
-    await access(path, constants.F_OK)
-    return (await lstat(path)).isDirectory() && (await readdir(path)).length > 0
-  } catch {
-    return false
-  }
-}
-
-export async function isFile(...pathParts: any[]): Promise<boolean> {
-  try {
-    let path = pathParts.map(p => p.toString()).join(sep)
-    await access(path, constants.F_OK)
-    return (await lstat(path)).isFile()
-  } catch {
-    return false
-  }
+  return execSucceeds('ssh', ['-i', '~/.minami-user/id.pem', config.host, command])
 }
 
 export async function isValidObjectDirectory(...pathParts: any[]) {
@@ -117,11 +86,11 @@ export async function isValidObjectDirectory(...pathParts: any[]) {
 
 export async function isCopySafe(source: string, destination: string) {
   for (let entry of await readdir(source)) {
-    if (await isFile(join(source, entry))) {
-      if (await isFile(join(destination, entry))) {
+    if (await isFile(source, entry)) {
+      if (await isFile(destination, entry)) {
         return false
       }
-    } else if (await isDirectory(join(destination, entry))) {
+    } else if (await isDirectory(destination, entry)) {
       if (!await isCopySafe(join(source, entry), join(destination, entry))) {
         return false
       }
