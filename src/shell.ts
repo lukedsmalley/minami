@@ -1,6 +1,19 @@
 import * as path from 'path'
 import * as fs from 'fs-extra'
 import { homedir } from 'os'
+import { Configuration } from './common'
+
+export class Shell {
+  private shellPath: string
+  private remoteHost: string
+
+  private constructor(private config: Configuration) {
+    this.shellPath = config.shell
+    this.remoteHost = config.host
+  }
+
+  
+}
 
 export function join(...parts: any[]) {
   if (parts.length < 1) {
@@ -44,6 +57,10 @@ export function cp(source: string, target: string) {
 
 export function rm(...parts: any[]) {
   return fs.remove(resolve(...parts))
+}
+
+export function ls(...parts: any[]) {
+  return fs.readdir(resolve(...parts))
 }
 
 export async function isDirectory(...parts: any[]): Promise<boolean> {

@@ -1,8 +1,7 @@
 import { spawn } from 'child_process'
 import chalk from 'chalk'
-import { readdir } from 'fs-extra'
 import { createInterface } from 'readline'
-import { isFile, join, isDirectory } from './fs'
+import { isFile, join, isDirectory, ls } from './fs'
 
 export const MINAMI_USER_DIR = '~/.minami-user',
              MINAMI_CONFIG_PATH = '~/.minami-user/config.json',
@@ -10,6 +9,7 @@ export const MINAMI_USER_DIR = '~/.minami-user',
              MINAMI_DEFAULT_TEMPLATE_DIR = '~/.minami-user/default_template'
 
 export interface Configuration {
+  readonly shell: string
   readonly host: string
 }
 
@@ -85,7 +85,7 @@ export async function isValidObjectDirectory(...pathParts: any[]) {
 }
 
 export async function isCopySafe(source: string, destination: string) {
-  for (let entry of await readdir(source)) {
+  for (let entry of await ls(source)) {
     if (await isFile(source, entry)) {
       if (await isFile(destination, entry)) {
         return false

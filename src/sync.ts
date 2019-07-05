@@ -56,7 +56,7 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
 
     if (!destinationExists) {
       warn('Checked out files were missing; recreating them from local history')
-      exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'checkout'])
+      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'checkout'])
       return 0
     }
   } else if (remoteObjectExists) {
@@ -67,11 +67,11 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
       return 1
     } else {
       info('Cloning object from remote system')
-      exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'clone', `ssh://${config.host}/~/.minami-user/objects/${id}`])
+      await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'clone', `ssh://${config.host}/~/.minami-user/objects/${id}`])
     }
   } else {
     info('No object found on remote system; creating object locally')
-    exec('git', ['-C', localObjectPath, `--git-dir=.`, 'init'])
+    await exec('git', ['-C', localObjectPath, `--git-dir=.`, 'init'])
   }
 
   if (!await isValidObjectDirectory(destination)) {
@@ -95,12 +95,12 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
   }
 
   info('Adding changes to history')
-  exec('git', ['-C', destination, `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'add', '.'])
-  execSucceeds('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', Date.now()])
+  await exec('git', ['-C', destination, `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'add', '.'])
+  await execSucceeds('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', Date.now()])
 
   if (remoteObjectExists) {
     info('Pulling any new changes from remote system')
-    exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'pull'])
+    await exec('git', [`--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'pull'])
 
     if (!await execSucceeds('git', [`--git-dir=${localObjectPath}`, 'merge', 'HEAD'])) {
       warn('Changes from the remote system must be merged with your local changes. ' +
@@ -109,11 +109,11 @@ export async function sync(config: Configuration, checkouts: Record<string, stri
     }
 
     info('Pushing history to remote system')
-    exec('git', [`--git-dir=${localObjectPath}`, 'push'])
+    await exec('git', [`--git-dir=${localObjectPath}`, 'push'])
   } else {
     info('Copying object to remote system')
-    ssh(config, 'mkdir -p ~/.minami-user/objects')
-    exec('scp', ['-i', '~/.minami-user/id.pem', '-r', localObjectPath, `${config.host}:~/.minami-user/objects`])
+    await ssh(config, 'mkdir -p ~/.minami-user/objects')
+    await exec('scp', ['-i', '~/.minami-user/id.pem', '-r', localObjectPath, `${config.host}:~/.minami-user/objects`])
   }
 
   return 0
