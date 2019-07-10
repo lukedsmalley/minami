@@ -4,12 +4,14 @@ import { drop } from './drop'
 import { Shell } from './shell'
 import { severe } from './tty'
 import { loadConfig, CheckoutDatabase } from './files'
+import { destroy } from './destroy';
 
 const doc = `
 Minami 1.0
 
 Usage: minami sync [-t=<template_id>] <id> [<destination>]
        minami drop <id>
+       minami destroy <id>
 
 Options:
   -h --help      Print usage information
@@ -27,6 +29,8 @@ if (args.sync) {
   handler = (sh, checkouts) => sync(sh, checkouts, args['<id>'], args['<destination>'], args['<template_id>'])
 } else if (args.drop) {
   handler = (sh, checkouts) => drop(sh, checkouts, args['<id>'])
+} else if (args.destroy) {
+  handler = (sh, checkouts) => destroy(sh, checkouts, args['<id>'])
 }
 
 ;(async () => {

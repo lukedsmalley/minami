@@ -1,7 +1,7 @@
 import { parse } from 'path'
 import { Shell } from './shell'
 import { info, warn } from './tty'
-import { join, resolve, isNonEmptyDirectory, mv, isValidObjectDirectory, isCopySafe, cp } from './common'
+import { join, resolve, isNonEmptyDirectory, mv, isValidObjectDirectory, isCopySafe, cp, mkdirs } from './common'
 import { CheckoutDatabase } from './files'
 
 export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, destination?: string, template?: string): Promise<number> {
@@ -42,7 +42,7 @@ export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, d
   info(`Checkout directory is ${destination}`)
 
   info('Looking up local and remote objects')
-  const remoteObjectExists = await sh.succeedsOnRemote(`git --gir-dir=~/.minami-user/objects/${id} merge HEAD`)
+  const remoteObjectExists = await sh.succeedsOnRemote(`git --git-dir=~/.minami-user/objects/${id} merge HEAD`)
   const localObjectPath = join('~/.minami-user/objects', id)
   const localObjectExists = await isNonEmptyDirectory(localObjectPath)
   const destinationExists = await isNonEmptyDirectory(destination)
@@ -72,6 +72,7 @@ export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, d
     }
   } else {
     info('No object found on remote system; creating object locally')
+    await mkdirs(localObjectPath)
     await sh.here('git', '-C', localObjectPath, `--git-dir=.`, 'init')
   }
 

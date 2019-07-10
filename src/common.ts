@@ -1,6 +1,7 @@
 import * as fs from 'fs-extra'
 import * as path from 'path'
 import { homedir } from 'os'
+import { debug } from './tty';
 
 export function join(...parts: any[]) {
   if (parts.length < 1) {
@@ -27,15 +28,25 @@ export function resolve(...parts: any[]) {
 }
 
 export function mv(source: string, target: string) {
+  debug(`mv '${source}' '${target}'`)
   return fs.move(resolve(source), resolve(target))
 }
 
 export function cp(source: string, target: string) {
+  debug(`cp -r '${source}' '${target}'`)
   return fs.copy(resolve(source), resolve(target))
 }
 
 export function rm(...parts: any[]) {
-  return fs.remove(resolve(...parts))
+  const cat = resolve(...parts)
+  debug(`rm -r '${cat}'`)
+  return fs.remove(cat)
+}
+
+export function mkdirs(...parts: any[]) {
+  const cat = resolve(...parts)
+  debug(`mkdir -p '${cat}'`)
+  return fs.mkdirs(cat)
 }
 
 export function ls(...parts: any[]) {
@@ -77,7 +88,7 @@ export async function inputJSON<T extends object>(source: string, defaults: T) {
     await outputJSON(source, defaults)
     return defaults
   } else {
-    const data = fs.readJSON(resolve(source))
+    const data = await fs.readJSON(resolve(source))
     return Object.assign({}, defaults, data) as T
   }
 }
