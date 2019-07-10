@@ -2,9 +2,9 @@ import { parse } from 'path'
 import { Shell } from './shell'
 import { info, warn } from './tty'
 import { join, resolve, isNonEmptyDirectory, mv, isValidObjectDirectory, isCopySafe, cp, mkdirs } from './common'
-import { CheckoutDatabase } from './files'
+import { JSONDatabase } from './files'
 
-export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, destination?: string, template?: string): Promise<number> {
+export async function sync(sh: Shell, checkouts: JSONDatabase, burns: JSONDatabase, id: string, destination?: string, template?: string): Promise<number> {
   if (checkouts.has(id) && !await isNonEmptyDirectory(checkouts.get(id))) {
     info('The previous checkout directory no longer exists')
     await checkouts.delete(id)
@@ -42,25 +42,10 @@ export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, d
   info(`Checkout directory is ${destination}`)
 
   info('Looking up local and remote objects')
-  const remoteObjectExists = await sh.succeedsOnRemote(`git --git-dir=~/.minami-user/objects/${id} merge HEAD`)
-  const localObjectPath = join('~/.minami-user/objects', id)
-  const localObjectExists = await isNonEmptyDirectory(localObjectPath)
+  const remoteObjectExists = await sh.succeedsOnRemote(`test -f ~/.minami-user/objects/${id}/latest.tar.gz`)
   const destinationExists = await isNonEmptyDirectory(destination)
 
-  if (localObjectExists) {
-    if (!await sh.succeedsHere('git', `--git-dir=${localObjectPath}`, 'merge', 'HEAD')) {
-      warn('Changes from the remote system are still in the process of being merged into your ' +
-           'checked-out files. Finish resolving merge conflicts in the checked-out files and' +
-           `then run 'minami accept ${id}'.`)
-      return 1
-    }
-
-    if (!destinationExists) {
-      warn('Checked out files were missing; recreating them from local history')
-      await sh.here('git', `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'checkout')
-      return 0
-    }
-  } else if (remoteObjectExists) {
+  /*if (remoteObjectExists) {
     if (destinationExists) {
       warn('Destination is a non-empty directory, but no object history was found. ' +
             'You need to clone the object into a separate directory and then manually ' +
@@ -74,7 +59,7 @@ export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, d
     info('No object found on remote system; creating object locally')
     await mkdirs(localObjectPath)
     await sh.here('git', '-C', localObjectPath, `--git-dir=.`, 'init')
-  }
+  }*/
 
   if (!await isValidObjectDirectory(destination)) {
     if (template) {
@@ -105,7 +90,7 @@ export async function sync(sh: Shell, checkouts: CheckoutDatabase, id: string, d
 
   info('Adding changes to history')
   await sh.here('git', '-C', destination, `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'add', '.')
-  await sh.succeedsHere('git', `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', Date.now().toString())
+  await sh.succeedsHere('git', `--git-dir=${localObjectPath}`, `--work-tree=${destination}`, 'commit', '-m', Date.now())
 
   if (remoteObjectExists) {
     info('Pulling any new changes from remote system')

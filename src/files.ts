@@ -1,5 +1,8 @@
 import { inputJSON, outputJSON } from './common'
 
+export const BURN_FILE = '~/.minami-user/burns.json',
+             CHECKOUT_FILE = '~/.minami-user/checkouts.json'
+
 export interface Configuration {
   readonly shell: string
   readonly host: string
@@ -14,32 +17,33 @@ export function loadConfig() {
   return inputJSON('~/.minami-user/config.json', DEFAULT_CONFIGURATION)
 }
 
-export class CheckoutDatabase {
-  private constructor(private checkouts: Record<string, string>) { }
+export class JSONDatabase {
+  private constructor(private entries: Record<string, string>,
+                      private path: string) { }
 
-  static load() {
-    return inputJSON('~/.minami-user/checkouts.json', {})
-      .then(data => new CheckoutDatabase(data))
+  static load(path: string) {
+    return inputJSON(path, {})
+      .then(data => new JSONDatabase(data, path))
   }
 
   has(id: string) {
-    return typeof this.checkouts[id] === 'string'
+    return typeof this.entries[id] === 'string'
   }
 
   get(id: string) {
     if (!this.has(id)) {
-      throw 'CheckoutDatabaseError: get(id) invoked without checking the result of has(id)'
+      throw 'JSONDatabaseError: get(id) invoked without checking the result of has(id)'
     }
-    return this.checkouts[id]
+    return this.entries[id]
   }
 
   delete(id: string) {
-    delete this.checkouts[id]
-    return outputJSON('~/.minami-user/checkouts.json', this.checkouts)
+    delete this.entries[id]
+    return outputJSON(this.path, this.entries)
   }
 
-  set(id: string, path: string) {
-    this.checkouts[id] = path
-    return outputJSON('~/.minami-user/checkouts.json', this.checkouts)
+  set(id: string, value: string) {
+    this.entries[id] = value
+    return outputJSON(id, this.entries)
   }
 }

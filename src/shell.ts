@@ -11,7 +11,8 @@ export class Shell {
     this.remoteHost = config.host
   }
 
-  here(command: string, ...args: string[]): Promise<string> {
+  here(command: string, ...args: any[]): Promise<string> {
+    args = args.map(String)
     return new Promise((resolve, reject) => {
       debug([command, ...args.map(arg => arg.indexOf(' ') >= 0 ? `'${arg}'` : arg)].join(' '))
       let subprocess = spawn(command, args, { shell: this.shellPath })
@@ -34,7 +35,7 @@ export class Shell {
     })
   }
 
-  async succeedsHere(command: string, ...args: string[]) {
+  async succeedsHere(command: string, ...args: any[]) {
     try {
       await this.here(command, ...args)
       return true

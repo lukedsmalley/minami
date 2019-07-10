@@ -1,7 +1,8 @@
 import * as fs from 'fs-extra'
 import * as path from 'path'
 import { homedir } from 'os'
-import { debug } from './tty';
+import { debug } from './tty'
+import { createHash } from 'crypto'
 
 export function join(...parts: any[]) {
   if (parts.length < 1) {
@@ -95,6 +96,39 @@ export async function inputJSON<T extends object>(source: string, defaults: T) {
 
 export function outputJSON(target: string, data: any) {
   return fs.outputJSON(resolve(target), data, { spaces: 2 })
+}
+
+async function getFileSize(...parts: any[]) {
+  return (await fs.lstat(resolve(...parts))).size
+}
+
+function getFileSHA2(...parts: any[]) {
+  const hash = createHash('sha512')
+  const stream = fs.createReadStream(resolve(...parts))
+  return new Promise((resolve, reject) => {
+    stream.on('error', reject)
+    stream.on('data', data => hash.update(data))
+    stream.on('end', () => resolve(hash.digest('base64')))
+  })
+}
+
+export async function isMergeSafe(source: string, target: string) {
+  for (let entry of await ls(source)) {
+    if (await isFile(source, entry)) {
+      if (await isFile(target, entry)) {
+        if (await getFileSize(target, entry) !== await getFileSize(source, entry) ||
+            await getFileSHA2(target, entry) !== await getFileSHA2(source, entry)) {
+          return false
+        }
+      }
+    } else {
+      if (await isNonEmptyDirectory(target, entry) &&
+          !await isMergeSafe(join(source, entry), join(target, entry))) {
+        return false
+      }
+    }
+  }
+  return true
 }
 
 export async function isValidObjectDirectory(...pathParts: any[]) {
