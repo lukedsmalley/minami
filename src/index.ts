@@ -1,14 +1,14 @@
 import { docopt } from 'docopt'
-import { readJSON } from './fs'
 import { sync } from './sync'
 import { drop } from './drop'
-import { Configuration } from './common'
-import chalk from 'chalk'
+import { Shell } from './shell'
+import { severe } from './tty'
+import { loadConfig, CheckoutDatabase } from './files'
 
 const doc = `
 Minami 1.0
 
-Usage: minami sync [-t=<template_path>] <id> [<destination>]
+Usage: minami sync [-t=<template_id>] <id> [<destination>]
        minami drop <id>
 
 Options:
@@ -17,27 +17,25 @@ Options:
 `
 
 const args = docopt(doc, { version: 'Minami 1.0' })
-type Handler = (config: Configuration, checkouts: Record<string, string>) => Promise<number>
-let handler: Handler = async (config, checkouts) => {
+type Handler = (sh: Shell, checkouts: CheckoutDatabase) => Promise<number>
+let handler: Handler = async () => {
   console.log(doc)
   return 0
 }
 
 if (args.sync) {
-  handler = (config, checkouts) => sync(config, checkouts, args['<id>'], args['<destination>'], args['<template_path>'])
+  handler = (sh, checkouts) => sync(sh, checkouts, args['<id>'], args['<destination>'], args['<template_id>'])
 } else if (args.drop) {
-  handler = (config, checkouts) => drop(config, checkouts, args['<id>'])
+  handler = (sh, checkouts) => drop(sh, checkouts, args['<id>'])
 }
 
 ;(async () => {
-  let config = await readJSON('~/.minami-user/config.json') as Configuration
-  if (typeof config.host !== 'string') {
-    throw 'Error: No host specified in ~/.minami-user/config.json'
-  }
-  let checkouts = await readJSON('~/.minami-user/checkouts.json')
-  process.exit(await handler(config, checkouts))
+  let config = await loadConfig()
+  let sh = new Shell(config)
+  let checkouts = await CheckoutDatabase.load()
+  process.exit(await handler(sh, checkouts))
 })().catch(err => {
-  console.log(chalk.redBright(`Operation failed due to ${err}`))
+  severe(`Operation failed due to ${err}`)
   if (err.stack) {
     console.log(err.stack)
   }

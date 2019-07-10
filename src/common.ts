@@ -1,24 +1,89 @@
-import { spawn } from 'child_process'
-import chalk from 'chalk'
-import { createInterface } from 'readline'
-import { isFile, join, isDirectory, ls } from './fs'
+import * as fs from 'fs-extra'
+import * as path from 'path'
+import { homedir } from 'os'
 
-export const MINAMI_USER_DIR = '~/.minami-user',
-             MINAMI_CONFIG_PATH = '~/.minami-user/config.json',
-             MINAMI_CHECKOUT_INDEX_PATH = '~/.minami-user/checkouts.json',
-             MINAMI_DEFAULT_TEMPLATE_DIR = '~/.minami-user/default_template'
-
-export interface Configuration {
-  readonly shell: string
-  readonly host: string
+export function join(...parts: any[]) {
+  if (parts.length < 1) {
+    throw 'No path segments given'
+  }
+  let cat = String(parts[0])
+  for (let i = 1; i < parts.length; i++) {
+    if (!cat.endsWith('/')) {
+      cat += '/'
+    }
+    let part = String(parts[i])
+    cat += part.startsWith('/') ? part.substring(1) : part
+  }
+  return cat
 }
 
-export function info(...message: string[]) {
-  console.log(chalk.cyanBright(...message))
+export function resolve(...parts: any[]) {
+  let cat = join(...parts)
+  if (cat.startsWith('~/')) {
+    return path.resolve(homedir(), cat.substring(2))
+  } else {
+    return path.resolve(cat)
+  }
 }
 
-export function warn(...message: string[]) {
-  console.log(chalk.yellow(...message))
+export function mv(source: string, target: string) {
+  return fs.move(resolve(source), resolve(target))
+}
+
+export function cp(source: string, target: string) {
+  return fs.copy(resolve(source), resolve(target))
+}
+
+export function rm(...parts: any[]) {
+  return fs.remove(resolve(...parts))
+}
+
+export function ls(...parts: any[]) {
+  return fs.readdir(resolve(...parts))
+}
+
+export async function isDirectory(...parts: any[]): Promise<boolean> {
+  try {
+    let cat = resolve(...parts)
+    await fs.access(cat, fs.constants.F_OK)
+    return (await fs.lstat(cat)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+export async function isNonEmptyDirectory(...parts: any[]): Promise<boolean> {
+  try {
+    let cat = resolve(...parts)
+    await fs.access(cat, fs.constants.F_OK)
+    return (await fs.lstat(cat)).isDirectory() && (await fs.readdir(cat)).length > 0
+  } catch {
+    return false
+  }
+}
+
+export async function isFile(...parts: any[]): Promise<boolean> {
+  try {
+    let cat = resolve(...parts)
+    await fs.access(cat, fs.constants.F_OK)
+    return (await fs.lstat(cat)).isFile()
+  } catch {
+    return false
+  }
+}
+
+export async function inputJSON<T extends object>(source: string, defaults: T) {
+  if (!await isFile(source)) {
+    await outputJSON(source, defaults)
+    return defaults
+  } else {
+    const data = fs.readJSON(resolve(source))
+    return Object.assign({}, defaults, data) as T
+  }
+}
+
+export function outputJSON(target: string, data: any) {
+  return fs.outputJSON(resolve(target), data, { spaces: 2 })
 }
 
 export async function isValidObjectDirectory(...pathParts: any[]) {
@@ -38,30 +103,4 @@ export async function isCopySafe(source: string, destination: string) {
     }
   }
   return true
-}
-
-export function readOptional(prompt: string) {
-  let reader = createInterface({
-    input: process.stdin,
-    output: process.stdout
-  })
-  return new Promise(resolve => {
-    reader.question(prompt + '[Y/n]', answer => {
-      reader.close()
-      resolve(answer === 'Y' || answer === 'y')
-    })
-  })
-}
-
-export function readLine(prompt: string) {
-  let reader = createInterface({
-    input: process.stdin,
-    output: process.stdout
-  })
-  return new Promise(resolve => {
-    reader.question(prompt, answer => {
-      reader.close()
-      resolve(answer)
-    })
-  })
 }

@@ -1,17 +1,16 @@
-import { Configuration } from './common'
-import { rm, writeJSON, isDirectory } from './fs'
+import { rm, isDirectory } from './common'
+import { CheckoutDatabase } from './files'
+import { Shell } from './shell'
 
-export async function drop(config: Configuration, clones: Record<string, string>, id: string) {
+export async function drop(sh: Shell, checkouts: CheckoutDatabase, id: string) {
   if (await isDirectory('~/.minami-user/objects', id)) {
     await rm('~/.minami-user/objects', id)
   }
 
-  if (clones[id]) {
-    await rm(clones[id])
-    delete clones[id]
+  if (checkouts.has(id)) {
+    await rm(checkouts.get(id))
+    checkouts.delete(id)
   }
-
-  await writeJSON('~/.minami-user/clones.json', clones)
 
   return 0
 }
