@@ -10,34 +10,19 @@ export async function sync(sh: Shell, checkouts: JSONDatabase, burns: JSONDataba
     await checkouts.delete(id)
   }
 
-  if (destination) {
-    if (parse(resolve(destination)).base !== id) {
-      destination = join(destination, id)
-    }
-  }
-
   if (checkouts.has(id)) {
     const checkoutPath = checkouts.get(id)
     if (destination && destination !== checkoutPath) {
-      if (await isNonEmptyDirectory(destination)) {
-        warn(`The object is checked out into '${checkoutPath}', ` + 
-            `but the requested sync destination is non-empty directory '${destination}'. ` +
-            'You need to manually merge the contents of these two directories.')
-        return 1
-      } else {
-        info('A destination different from the existing checkout directory was given; moving files to new location')
-        await mv(checkoutPath, destination)
-        await checkouts.set(id, destination)
-      }
+      warn(`The object is checked out into '${checkoutPath}', ` + 
+            `but the requested sync destination is '${destination}'. ` +
+            `You need to run 'minami drop ${id}' before performing this sync.`)
     } else {
       destination = checkoutPath
     }
   } else if (destination) {
     await checkouts.set(id, destination)
   } else {
-    const cwdBase = parse(process.cwd()).base
-    destination = cwdBase === id ? process.cwd() : join(process.cwd(), id)
-    await checkouts.set(id, destination)
+    await checkouts.set(id, destination = process.cwd())
   }
   info(`Checkout directory is ${destination}`)
 

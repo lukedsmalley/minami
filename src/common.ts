@@ -3,6 +3,7 @@ import * as path from 'path'
 import { homedir } from 'os'
 import { debug } from './tty'
 import { createHash } from 'crypto'
+import { safeLoad, safeDump } from 'js-yaml'
 
 export function join(...parts: any[]) {
   if (parts.length < 1) {
@@ -84,25 +85,25 @@ export async function isFile(...parts: any[]): Promise<boolean> {
   }
 }
 
-export async function inputJSON<T extends object>(source: string, defaults: T) {
+export async function inputYAML<T extends object>(source: string, defaults: T) {
   if (!await isFile(source)) {
-    await outputJSON(source, defaults)
+    await outputYAML(source, defaults)
     return defaults
   } else {
-    const data = await fs.readJSON(resolve(source))
+    const data = safeLoad(await fs.readFile(resolve(source), { encoding: 'utf8' }))
     return Object.assign({}, defaults, data) as T
   }
 }
 
-export function outputJSON(target: string, data: any) {
-  return fs.outputJSON(resolve(target), data, { spaces: 2 })
+export function outputYAML(target: string, data: any) {
+  return fs.outputFile(resolve(target), safeDump(data))
 }
 
 async function getFileSize(...parts: any[]) {
   return (await fs.lstat(resolve(...parts))).size
 }
 
-function getFileSHA2(...parts: any[]) {
+function getFileSHA2(...parts: any[]): Promise<string> {
   const hash = createHash('sha512')
   const stream = fs.createReadStream(resolve(...parts))
   return new Promise((resolve, reject) => {
@@ -148,4 +149,40 @@ export async function isCopySafe(source: string, destination: string) {
     }
   }
   return true
+}
+
+type DirectoryListing = { [name: string]: DirectoryListing | null }
+
+export async function dumpDirectory(...parts: any[]) {
+  const listing: DirectoryListing = {}
+  for (let entry of await fs.readdir(resolve(parts))) {
+    listing[entry] = await isDirectory(...parts, entry)
+      ? await dumpDirectory(...parts, entry)
+      : null
+  }
+  return listing
+}
+
+type DirectorySizeListing = { [name: string]: DirectorySizeListing | number }
+
+export async function dumpDirectorySize(...parts: any[]) {
+  const listing: DirectorySizeListing = {}
+  for (let entry of await fs.readdir(resolve(parts))) {
+    listing[entry] = await isDirectory(...parts, entry)
+      ? await dumpDirectorySize(...parts, entry)
+      : await getFileSize(...parts, entry)
+  }
+  return listing
+}
+
+type DirectoryContentListing = { [name: string]: DirectoryContentListing | string }
+
+export async function dumpDirectoryContents(...parts: any[]) {
+  const listing: DirectoryContentListing = {}
+  for (let entry of await fs.readdir(resolve(parts))) {
+    listing[entry] = await isDirectory(...parts, entry)
+      ? await dumpDirectoryContents(...parts, entry)
+      : await getFileSHA2(...parts, entry)
+  }
+  return listing
 }

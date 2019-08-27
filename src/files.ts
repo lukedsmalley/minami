@@ -1,4 +1,4 @@
-import { inputJSON, outputJSON } from './common'
+import { inputYAML, outputYAML } from './common'
 
 export const BURN_FILE = '~/.minami-user/burns.json',
              CHECKOUT_FILE = '~/.minami-user/checkouts.json'
@@ -17,13 +17,13 @@ export function loadConfig() {
   return inputJSON('~/.minami-user/config.json', DEFAULT_CONFIGURATION)
 }
 
-export class JSONDatabase {
+export class YAMLDatabase {
   private constructor(private entries: Record<string, string>,
                       private path: string) { }
 
   static load(path: string) {
-    return inputJSON(path, {})
-      .then(data => new JSONDatabase(data, path))
+    return inputYAML(path, {})
+      .then(data => new YAMLDatabase(data, path))
   }
 
   has(id: string) {
@@ -39,11 +39,11 @@ export class JSONDatabase {
 
   delete(id: string) {
     delete this.entries[id]
-    return outputJSON(this.path, this.entries)
+    return outputYAML(this.path, this.entries)
   }
 
   set(id: string, value: string) {
     this.entries[id] = value
-    return outputJSON(id, this.entries)
+    return outputYAML(id, this.entries)
   }
 }
