@@ -1,5 +1,6 @@
 import { mkdirs, resolve, inputYAML, ls } from '../common'
 import { Context } from './context'
+import glob from 'glob'
 
 interface SetBallEvent {
   type: 'set-ball',
@@ -7,6 +8,23 @@ interface SetBallEvent {
 }
 
 type Event = SetBallEvent
+
+export function walkIncluded(path: string, exclusions: string[]) {
+  const pattern = exclusions.length > 1 ? `{${exclusions.join(',')}}` : exclusions[0]
+  return new Promise((resolve, reject) => {
+    glob(pattern, {
+      cwd: path,
+      root: path,
+      dot: true
+    }, (err, matches) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(matches)
+      }
+    })
+  })
+}
 
 export async function push({ ssh }: Context, destination: string) {
   const objectFiles = (await ls(destination, '.minami/'))
