@@ -1,7 +1,7 @@
 import { docopt } from 'docopt'
 import { sync } from './sync'
 import { drop } from './drop'
-import { Shell } from './shell'
+import { Shell } from './routines/shells'
 import { severe } from './tty'
 import { loadConfig, JSONDatabase, CHECKOUT_FILE, BURN_FILE } from './files'
 import { destroy } from './destroy';

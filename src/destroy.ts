@@ -1,6 +1,6 @@
 import { rm, isDirectory } from './common'
 import { JSONDatabase } from './files'
-import { Shell } from './shell'
+import { Shell } from './routines/shells'
 
 export async function destroy(sh: Shell, checkouts: JSONDatabase, burns: JSONDatabase, id: string) {
   if (await isDirectory('~/.minami-user/objects', id)) {

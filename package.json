@@ -11,7 +11,8 @@
     "chalk": "^2.4.2",
     "docopt": "^0.6.2",
     "fs-extra": "^8.0.1",
-    "js-yaml": "^3.13.1"
+    "js-yaml": "^3.13.1",
+    "tar": "^4.4.10"
   },
   "devDependencies": {
     "@types/chalk": "^2.2.0",
@@ -19,6 +20,7 @@
     "@types/fs-extra": "^7.0.0",
     "@types/js-yaml": "^3.12.1",
     "@types/node": "^12.0.8",
+    "@types/tar": "^4.0.3",
     "typescript": "^3.5.1"
   },
   "scripts": {
