@@ -1,6 +1,7 @@
-import { mkdirs, resolve, inputYAML, ls } from '../common'
+import { mkdirs, resolve, inputYAML, ls, join } from '../common'
 import { Context } from './context'
 import glob from 'glob'
+import { lstat } from 'fs-extra';
 
 interface SetBallEvent {
   type: 'set-ball',
@@ -8,6 +9,26 @@ interface SetBallEvent {
 }
 
 type Event = SetBallEvent
+
+function getRegexFromGlob(glob: string) {
+  return new RegExp(
+    glob.split('**')
+    .map(part => part.split('*').join('[^/]*'))
+    .join('.*'))
+}
+
+async function walkFiltered(path: string, exclusions: string[], previous?: string) {
+  const files = []
+  const directories = []
+  for (let name of await ls(path, previous)) {
+    const stat = await lstat(resolve(join(path, previous), name))
+    if (stat.isFile()) {
+      files.push({ name, size: stat.size })
+    } else {
+      
+    }
+  }
+}
 
 export function walkIncluded(path: string, exclusions: string[]) {
   const pattern = exclusions.length > 1 ? `{${exclusions.join(',')}}` : exclusions[0]
