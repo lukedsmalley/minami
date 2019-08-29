@@ -1,7 +1,7 @@
 import { mkdirs, resolve, inputYAML, ls, join } from '../common'
 import { Context } from './context'
-import glob from 'glob'
-import { lstat } from 'fs-extra';
+import { lstat } from 'fs-extra'
+import minimatch from 'minimatch'
 
 interface SetBallEvent {
   type: 'set-ball',
@@ -10,41 +10,41 @@ interface SetBallEvent {
 
 type Event = SetBallEvent
 
-function getRegexFromGlob(glob: string) {
-  return new RegExp(
-    glob.split('**')
-    .map(part => part.split('*').join('[^/]*'))
-    .join('.*'))
+interface FileNode {
+  size: number
 }
 
-async function walkFiltered(path: string, exclusions: string[], previous?: string) {
-  const files = []
-  const directories = []
+interface ComputedFileNode extends FileNode {
+  hash: string
+}
+
+interface DirectoryNode<T extends FileNode> {
+  files: Record<string, T>
+  directories: Record<string, DirectoryNode<T>>
+}
+
+async function buildFilteredDirectoryTree(path: string, exclusions: string[], previous?: string): Promise<DirectoryNode<ComputedFileNode>> {
+  const files: Record<string, ComputedFileNode> = {}
+  const directories: Record<string, DirectoryNode<ComputedFileNode>> = {}
   for (let name of await ls(path, previous)) {
-    const stat = await lstat(resolve(join(path, previous), name))
-    if (stat.isFile()) {
-      files.push({ name, size: stat.size })
+    const subpath = join(previous, name)
+    const filterMatches = exclusions.filter(exclusion =>
+      minimatch(subpath, exclusion, { dot: true, nocomment: true }))
+    if (filterMatches.length > 0 ) {
+      continue
+    }
+    const resolvedSubpath = resolve(path, subpath)
+    const stat = await fs.lstat(resolvedSubpath)
+    if (stat.isDirectory()) {
+      directories[name] = await buildFilteredDirectoryTree(path, exclusions, subpath)
     } else {
-      
+      files[name] = {
+        size: stat.size,
+        hash: await getFileSHA2(resolvedSubpath)
+      }
     }
   }
-}
-
-export function walkIncluded(path: string, exclusions: string[]) {
-  const pattern = exclusions.length > 1 ? `{${exclusions.join(',')}}` : exclusions[0]
-  return new Promise((resolve, reject) => {
-    glob(pattern, {
-      cwd: path,
-      root: path,
-      dot: true
-    }, (err, matches) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve(matches)
-      }
-    })
-  })
+  return { files, directories }
 }
 
 export async function push({ ssh }: Context, destination: string) {

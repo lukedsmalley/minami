@@ -6,24 +6,24 @@ import { createHash } from 'crypto'
 import { safeLoad, safeDump } from 'js-yaml'
 
 export function join(...parts: any[]) {
-  if (parts.length < 1) {
-    throw 'No path segments given'
-  }
-  let cat = String(parts[0])
-  for (let i = 1; i < parts.length; i++) {
+  const strings = parts
+    .filter(part => part !== undefined)
+    .map(String)
+    .filter(part => part.length > 0)
+  let cat = strings[0]
+  for (let i = 1; i < strings.length; i++) {
     if (!cat.endsWith('/')) {
       cat += '/'
     }
-    let part = String(parts[i])
-    cat += part.startsWith('/') ? part.substring(1) : part
+    cat += strings[i].startsWith('/') ? strings[i].substring(1) : strings[i]
   }
-  return cat
+  return cat.endsWith('/') ? cat.substring(0, cat.length - 1) : cat
 }
 
 export function resolve(...parts: any[]) {
   let cat = join(...parts)
-  if (cat.startsWith('~/')) {
-    return path.resolve(homedir(), cat.substring(2))
+  if (cat.startsWith('~')) {
+    return path.resolve(homedir(), cat.substring(1))
   } else {
     return path.resolve(cat)
   }
@@ -104,7 +104,7 @@ async function getFileSize(...parts: any[]) {
 }
 
 function getFileSHA2(...parts: any[]): Promise<string> {
-  const hash = createHash('sha512')
+  const hash = createHash('sha256')
   const stream = fs.createReadStream(resolve(...parts))
   return new Promise((resolve, reject) => {
     stream.on('error', reject)
