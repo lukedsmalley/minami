@@ -103,7 +103,7 @@ async function getFileSize(...parts: any[]) {
   return (await fs.lstat(resolve(...parts))).size
 }
 
-function getFileSHA2(...parts: any[]): Promise<string> {
+export function getFileSHA2(...parts: any[]): Promise<string> {
   const hash = createHash('sha256')
   const stream = fs.createReadStream(resolve(...parts))
   return new Promise((resolve, reject) => {
