@@ -1,42 +1,30 @@
-import { lstat } from 'fs-extra'
-import { ls, join, resolve, getFileSHA2 } from '../common'
-import minimatch from 'minimatch'
-
-async function lsFiltered(root: string, subpath: string | undefined, exclusions: string[], inclusions: string[]) {
-  const patterns = inclusions.length ? inclusions : exclusions
-  return (await ls(root, subpath)).filter(entry =>
-    patterns.filter(pattern => minimatch(entry, pattern, {
-      dot: true,
-      nocomment: true
-    })).length ? inclusions.length : !inclusions.length)
-}
+import { glob, join, resolve, computeFileHash, lstat, base62 } from './fs'
+import tar from 'tar'
+import { createHash } from 'crypto'
 
 interface FileNode {
   size: number
-}
-
-interface ComputedFileNode extends FileNode {
   hash: string
 }
 
-interface DirectoryNode<T extends FileNode> {
-  files: Record<string, T>
-  directories: Record<string, DirectoryNode<T>>
+export interface DirectoryNode {
+  files: Record<string, FileNode>
+  directories: Record<string, DirectoryNode>
 }
 
-async function buildTree(root: string, exclusions: string[], inclusions: string[], previousSubpath?: string): Promise<DirectoryNode<ComputedFileNode>> {
-  const files: Record<string, ComputedFileNode> = {}
-  const directories: Record<string, DirectoryNode<ComputedFileNode>> = {}
+export async function buildTree(path: string, exclusions: string[], inclusions: string[], previousSubpath: string = ''): Promise<DirectoryNode> {
+  const files: Record<string, FileNode> = {}
+  const directories: Record<string, DirectoryNode> = {}
   
-  for (let name of await lsFiltered(root, previousSubpath, exclusions, inclusions)) {
+  for (let name of await glob(path, previousSubpath, exclusions, inclusions)) {
     const subpath = join(previousSubpath, name)
-    const stat = await lstat(resolve(root, subpath))
+    const stat = await lstat(path, subpath)
     if (stat.isDirectory()) {
-      directories[name] = await buildTree(root, exclusions, inclusions, subpath)
+      directories[name] = await buildTree(path, exclusions, inclusions, subpath)
     } else {
       files[name] = {
         size: stat.size,
-        hash: await getFileSHA2(root, subpath)
+        hash: await computeFileHash(path, subpath)
       }
     }
   }
@@ -44,24 +32,24 @@ async function buildTree(root: string, exclusions: string[], inclusions: string[
   return { files, directories }
 }
 
-async function treeMatches(root: string, tree: DirectoryNode<ComputedFileNode>, exclusions: string[], inclusions: string[], previousSubpath?: string) {
-  const entries = await lsFiltered(root, previousSubpath, exclusions, inclusions)
+export async function treeMatches(path: string, tree: DirectoryNode, exclusions: string[], inclusions: string[], previousSubpath: string = '') {
+  const entries = await glob(path, previousSubpath, exclusions, inclusions)
   const directoryQueue = Object.keys(tree.directories)
   const fileQueue = Object.keys(tree.files)
 
   for (let name of entries) {
     const subpath = join(previousSubpath, name)
-    const stat = await lstat(resolve(root, subpath))
+    const stat = await lstat(resolve(path, subpath))
     if (stat.isDirectory()) {
       if (!tree.directories[name] ||
-          !await treeMatches(root, tree.directories[name], exclusions, inclusions, subpath)) {
+          !await treeMatches(path, tree.directories[name], exclusions, inclusions, subpath)) {
         return false
       }
       directoryQueue.splice(directoryQueue.indexOf(name), 1)
     } else {
       if (!tree.files[name] ||
           tree.files[name].size !== stat.size || 
-          tree.files[name].hash !== await getFileSHA2(root, subpath)) {
+          tree.files[name].hash !== await computeFileHash(path, subpath)) {
         return false
       }
       fileQueue.splice(fileQueue.indexOf(name), 1)
@@ -69,4 +57,31 @@ async function treeMatches(root: string, tree: DirectoryNode<ComputedFileNode>, 
   }
 
   return !directoryQueue.length && !fileQueue.length
+}
+
+function getTreeFileList(tree: DirectoryNode) {
+  const files = Object.keys(tree.files)
+  for (let directory in tree.directories) {
+    if (Object.keys(tree.directories[directory].files).length < 1) {
+      files.push(directory)
+    } else {
+      files.push(...getTreeFileList(tree.directories[directory])
+        .map(file => join(directory, file)))
+    }
+  }
+  return files
+}
+
+export function computeHashFromTree(tree: DirectoryNode) {
+  const hash = createHash('sha256')
+  hash.update(getTreeFileList(tree).join(' '))
+  return base62.encode(hash.digest())
+}
+
+export async function createBallFromTree(source: string, tree: DirectoryNode, destination: string) {
+  await tar.create({
+    gzip: true,
+    file: destination,
+    cwd: source
+  }, getTreeFileList(tree))
 }

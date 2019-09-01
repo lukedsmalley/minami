@@ -1,4 +1,4 @@
-import { mkdirs, resolve, inputYAML } from '../common'
+import { mkdirs, resolve, inputYAML } from '../fs'
 import { Context } from './context'
 
 interface SetBallEvent {

@@ -1,7 +1,7 @@
 import { parse } from 'path'
 import { Shell } from './routines/shells'
 import { info, warn } from './tty'
-import { join, resolve, isNonEmptyDirectory, mv, isValidObjectDirectory, isCopySafe, cp, mkdirs } from './common'
+import { join, resolve, isNonEmptyDirectory, mv, isValidObjectDirectory, isCopySafe, cp, mkdirs } from './fs'
 import { JSONDatabase } from './files'
 
 export async function sync(sh: Shell, checkouts: JSONDatabase, burns: JSONDatabase, id?: string, destination?: string, template?: string): Promise<number> {

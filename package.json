@@ -8,6 +8,7 @@
   "license": "MIT",
   "private": false,
   "dependencies": {
+    "base-x": "^3.0.6",
     "chalk": "^2.4.2",
     "docopt": "^0.6.2",
     "fs-extra": "^8.0.1",
@@ -16,6 +17,7 @@
     "tar": "^4.4.10"
   },
   "devDependencies": {
+    "@types/base-x": "^3.0.0",
     "@types/chalk": "^2.2.0",
     "@types/docopt": "^0.6.31",
     "@types/fs-extra": "^7.0.0",

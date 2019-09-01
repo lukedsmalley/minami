@@ -1,9 +1,12 @@
 import * as fs from 'fs-extra'
 import * as path from 'path'
 import { homedir } from 'os'
-import { debug } from './tty'
+import { debug } from '../tty'
 import { createHash } from 'crypto'
-import { safeLoad, safeDump } from 'js-yaml'
+import minimatch from 'minimatch'
+import base_x from 'base-x'
+
+export const base62 = base_x('1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
 export function join(...parts: any[]) {
   const strings = parts
@@ -21,7 +24,7 @@ export function join(...parts: any[]) {
 }
 
 export function resolve(...parts: any[]) {
-  let cat = join(...parts)
+  const cat = join(...parts)
   if (cat.startsWith('~')) {
     return path.resolve(homedir(), cat.substring(1))
   } else {
@@ -39,25 +42,40 @@ export function cp(source: string, target: string) {
   return fs.copy(resolve(source), resolve(target))
 }
 
-export function rm(...parts: any[]) {
-  const cat = resolve(...parts)
+export function rm(...path: any[]) {
+  const cat = resolve(...path)
   debug(`rm -r '${cat}'`)
   return fs.remove(cat)
 }
 
-export function mkdirs(...parts: any[]) {
-  const cat = resolve(...parts)
+export function mkdirs(...path: any[]) {
+  const cat = resolve(...path)
   debug(`mkdir -p '${cat}'`)
   return fs.mkdirs(cat)
 }
 
-export function ls(...parts: any[]) {
-  return fs.readdir(resolve(...parts))
+export function ls(...path: any[]) {
+  return fs.readdir(resolve(...path))
 }
 
-export async function isDirectory(...parts: any[]): Promise<boolean> {
+export async function glob(root: string, path: string, exclusions: string[], inclusions: string[]) {
+  const patterns = inclusions.length ? inclusions : exclusions
+  return (await ls(root, path)).filter(entry =>
+    patterns.filter(pattern => minimatch(join(path, entry), pattern, {
+      dot: true,
+      nocomment: true
+    })).length ? inclusions.length : !inclusions.length)
+}
+
+export async function lstat(...path: any[]) {
+  const cat = resolve(...path)
+  await fs.access(cat, fs.constants.F_OK)
+  return fs.lstat(resolve(...path))
+}
+
+export async function isDirectory(...path: any[]) {
   try {
-    let cat = resolve(...parts)
+    const cat = resolve(...path)
     await fs.access(cat, fs.constants.F_OK)
     return (await fs.lstat(cat)).isDirectory()
   } catch {
@@ -65,9 +83,9 @@ export async function isDirectory(...parts: any[]): Promise<boolean> {
   }
 }
 
-export async function isNonEmptyDirectory(...parts: any[]): Promise<boolean> {
+export async function isDirectoryWithFiles(...path: any[]) {
   try {
-    let cat = resolve(...parts)
+    const cat = resolve(...path)
     await fs.access(cat, fs.constants.F_OK)
     return (await fs.lstat(cat)).isDirectory() && (await fs.readdir(cat)).length > 0
   } catch {
@@ -75,9 +93,9 @@ export async function isNonEmptyDirectory(...parts: any[]): Promise<boolean> {
   }
 }
 
-export async function isFile(...parts: any[]): Promise<boolean> {
+export async function isFile(...path: any[]) {
   try {
-    let cat = resolve(...parts)
+    const cat = resolve(...path)
     await fs.access(cat, fs.constants.F_OK)
     return (await fs.lstat(cat)).isFile()
   } catch {
@@ -85,31 +103,13 @@ export async function isFile(...parts: any[]): Promise<boolean> {
   }
 }
 
-export async function inputYAML<T extends object>(source: string, defaults: T) {
-  if (!await isFile(source)) {
-    await outputYAML(source, defaults)
-    return defaults
-  } else {
-    const data = safeLoad(await fs.readFile(resolve(source), { encoding: 'utf8' }))
-    return Object.assign({}, defaults, data) as T
-  }
-}
-
-export function outputYAML(target: string, data: any) {
-  return fs.outputFile(resolve(target), safeDump(data))
-}
-
-async function getFileSize(...parts: any[]) {
-  return (await fs.lstat(resolve(...parts))).size
-}
-
-export function getFileSHA2(...parts: any[]): Promise<string> {
+export function computeFileHash(...path: any[]): Promise<string> {
   const hash = createHash('sha256')
-  const stream = fs.createReadStream(resolve(...parts))
+  const stream = fs.createReadStream(resolve(...path))
   return new Promise((resolve, reject) => {
     stream.on('error', reject)
     stream.on('data', data => hash.update(data))
-    stream.on('end', () => resolve(hash.digest('base64')))
+    stream.on('end', () => resolve(base62.encode(hash.digest())))
   })
 }
 
@@ -118,12 +118,12 @@ export async function isMergeSafe(source: string, target: string) {
     if (await isFile(source, entry)) {
       if (await isFile(target, entry)) {
         if (await getFileSize(target, entry) !== await getFileSize(source, entry) ||
-            await getFileSHA2(target, entry) !== await getFileSHA2(source, entry)) {
+            await computeFileHash(target, entry) !== await computeFileHash(source, entry)) {
           return false
         }
       }
     } else {
-      if (await isNonEmptyDirectory(target, entry) &&
+      if (await isDirectoryWithFiles(target, entry) &&
           !await isMergeSafe(join(source, entry), join(target, entry))) {
         return false
       }
@@ -149,40 +149,4 @@ export async function isCopySafe(source: string, destination: string) {
     }
   }
   return true
-}
-
-type DirectoryListing = { [name: string]: DirectoryListing | null }
-
-export async function dumpDirectory(...parts: any[]) {
-  const listing: DirectoryListing = {}
-  for (let entry of await fs.readdir(resolve(parts))) {
-    listing[entry] = await isDirectory(...parts, entry)
-      ? await dumpDirectory(...parts, entry)
-      : null
-  }
-  return listing
-}
-
-type DirectorySizeListing = { [name: string]: DirectorySizeListing | number }
-
-export async function dumpDirectorySize(...parts: any[]) {
-  const listing: DirectorySizeListing = {}
-  for (let entry of await fs.readdir(resolve(parts))) {
-    listing[entry] = await isDirectory(...parts, entry)
-      ? await dumpDirectorySize(...parts, entry)
-      : await getFileSize(...parts, entry)
-  }
-  return listing
-}
-
-type DirectoryContentListing = { [name: string]: DirectoryContentListing | string }
-
-export async function dumpDirectoryContents(...parts: any[]) {
-  const listing: DirectoryContentListing = {}
-  for (let entry of await fs.readdir(resolve(parts))) {
-    listing[entry] = await isDirectory(...parts, entry)
-      ? await dumpDirectoryContents(...parts, entry)
-      : await getFileSHA2(...parts, entry)
-  }
-  return listing
 }

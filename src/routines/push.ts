@@ -1,35 +1,36 @@
-import { mkdirs, resolve, inputYAML, ls } from '../common'
+import { resolve, ls, isFile } from './fs'
 import { Context } from './context'
-
-interface SetBallEvent {
-  type: 'set-ball',
-  ball: string
-}
-
-type Event = SetBallEvent
-
-
+import { parse } from 'path'
+import { buildTree, createBallFromTree, computeHashFromTree, DirectoryNode, treeMatches } from './tree'
+import { outputJSON, inputJSON } from './serialization'
+import { loadObjectProperties } from './object';
+import { updateObjectHistory } from './history';
 
 export async function push({ ssh }: Context, destination: string) {
-  const objectFiles = (await ls(destination, '.minami'))
+  const objects = (await ls(destination, '.minami'))
     .filter(file => file.endsWith('.yml'))
-  for (let objectFile of objectFiles) {
-    
-  }
-  await mkdirs(destination, '.minami/history')
-  await ssh.download(`~/.minami/${id}.yml`, resolve(destination, `.minami/${id}.yml`))
-  const historyFile = resolve(destination, `.minami/history/${id}.yml`)
-  await ssh.download(`~/.minami/history/${id}.yml`, historyFile)
-  const history = await inputYAML<Event[]>(historyFile, [])
-  let latestBall = null
-  for (let event of history) {
-    if (event.type === 'set-ball') {
-      latestBall = event.ball
+    .map(file => parse(file).base)
+  for (let obj of objects) {
+    const propertiesFile = resolve(destination, `.minami/${obj}.yml`)
+    const treeFile = resolve(destination, `.minami/data/${obj}.tree.json`)
+    const historyFile = resolve(destination, `.minami/data/${obj}.history.json`)
+    const properties = await loadObjectProperties(propertiesFile)
+    let tree
+    if (await isFile(treeFile)) {
+      tree = await inputJSON<DirectoryNode>(treeFile, { files: {}, directories: {} })
+      if (!await treeMatches(destination, tree, properties.excludes || [], properties.includes || [])) {
+        tree = await buildTree(destination, properties.excludes || [], properties.includes || [])
+      }
+    } else {
+      tree = await buildTree(destination, properties.excludes || [], properties.includes || [])
     }
+    const treeHash = computeHashFromTree(tree)
+    const latestBallPath = resolve(destination, `.minami/data/${obj}.latest.tar.gz`)
+    await createBallFromTree(destination, tree, latestBallPath)
+    await outputJSON(treeFile, tree)
+    await updateObjectHistory(historyFile, obj, properties, treeHash)
+    await ssh.upload(propertiesFile, `~/.minami-user/${obj}.yml`)
+    await ssh.upload(historyFile, `~/.minami-user/data/${obj}.history.json`)
+    await ssh.upload(latestBallPath, `~/.minami-user/data/${obj}.${treeHash}.tar.gz`)
   }
-  if (latestBall === null) {
-    throw Error('No balls')
-  }
-  await mkdirs(destination, '.minami/ball')
-  await ssh.download(`~/.minami/ball/${latestBall}.tar.gz`, resolve(destination, `.minami/ball/${latestBall}.tar.gz`))
 }

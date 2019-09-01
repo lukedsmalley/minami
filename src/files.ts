@@ -1,4 +1,4 @@
-import { inputYAML, outputYAML } from './common'
+import { inputYAML, outputYAML } from './fs'
 
 export const BURN_FILE = '~/.minami-user/burns.json',
              CHECKOUT_FILE = '~/.minami-user/checkouts.json'

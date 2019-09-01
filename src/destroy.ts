@@ -1,4 +1,4 @@
-import { rm, isDirectory } from './common'
+import { rm, isDirectory } from './fs'
 import { JSONDatabase } from './files'
 import { Shell } from './routines/shells'
 
