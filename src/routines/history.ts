@@ -49,7 +49,7 @@ function deeplyEqual(a: any, b: any) {
   return true
 }
 
-export async function updateObjectHistory(destination: string, id: string, props: Properties, treeRef: string) {
+export async function updateObjectHistory(destination: string, id: string, props: Properties, treeRef?: string) {
   const propFilePath = resolve(destination, '.minami', id + '.yml')
   const history = await inputJSON<Event[]>(propFilePath, [])
   const additions: Event[] = []
@@ -61,11 +61,13 @@ export async function updateObjectHistory(destination: string, id: string, props
     additions.push({ type: 'set-props', props })
   }
 
-  const mostRecentTreeRefUpdate = getMostRecentEvent<SetTreeReferenceEvent>('set-tree-ref', history)
-  if (!mostRecentTreeRefUpdate ||
-      !mostRecentTreeRefUpdate.hash ||
-      mostRecentTreeRefUpdate.hash !== treeRef) {
-    additions.push({ type: 'set-tree-ref', hash: treeRef })
+  if (treeRef) {
+    const mostRecentTreeRefUpdate = getMostRecentEvent<SetTreeReferenceEvent>('set-tree-ref', history)
+    if (!mostRecentTreeRefUpdate ||
+        !mostRecentTreeRefUpdate.hash ||
+        mostRecentTreeRefUpdate.hash !== treeRef) {
+      additions.push({ type: 'set-tree-ref', hash: treeRef })
+    }
   }
 
   if (additions.length > 0) {

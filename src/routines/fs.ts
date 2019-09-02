@@ -2,11 +2,8 @@ import * as fs from 'fs-extra'
 import * as path from 'path'
 import { homedir } from 'os'
 import { debug } from '../tty'
-import { createHash } from 'crypto'
 import minimatch from 'minimatch'
-import base_x from 'base-x'
-
-export const base62 = base_x('1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+import { computeHashFromFile } from './hashing'
 
 export function join(...parts: any[]) {
   const strings = parts
@@ -103,22 +100,12 @@ export async function isFile(...path: any[]) {
   }
 }
 
-export function computeFileHash(...path: any[]): Promise<string> {
-  const hash = createHash('sha256')
-  const stream = fs.createReadStream(resolve(...path))
-  return new Promise((resolve, reject) => {
-    stream.on('error', reject)
-    stream.on('data', data => hash.update(data))
-    stream.on('end', () => resolve(base62.encode(hash.digest())))
-  })
-}
-
 export async function isMergeSafe(source: string, target: string) {
   for (let entry of await ls(source)) {
     if (await isFile(source, entry)) {
       if (await isFile(target, entry)) {
-        if (await getFileSize(target, entry) !== await getFileSize(source, entry) ||
-            await computeFileHash(target, entry) !== await computeFileHash(source, entry)) {
+        if ((await lstat(target, entry)).size !== (await lstat(source, entry)).size ||
+            await computeHashFromFile(target, entry) !== await computeHashFromFile(source, entry)) {
           return false
         }
       }
