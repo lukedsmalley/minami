@@ -1,6 +1,12 @@
-import { LocalShell, RemoteShell } from "./shells";
+import { LocalShell, RemoteShell } from './shells'
+
+export interface Transaction {
+  rollback(): Promise<void>
+  finalize(): Promise<void>
+}
 
 export interface Context {
-  sh: LocalShell,
-  ssh: RemoteShell
+  readonly sh: LocalShell
+  readonly ssh: RemoteShell
+  commit(transaction: Transaction): void
 }

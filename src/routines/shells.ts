@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import { Configuration } from '../files'
+import { Configuration } from './configuration'
 import { debug } from '../tty'
 
 class CommandResults {
